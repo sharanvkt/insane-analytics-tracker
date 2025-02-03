@@ -3,6 +3,7 @@ const path = require('path');
 const TerserPlugin = require('terser-webpack-plugin');
 
 module.exports = {
+  mode: 'production',
   entry: './src/core.js',
   output: {
     filename: 'analytics.min.js',
@@ -13,15 +14,6 @@ module.exports = {
   },
   optimization: {
     minimize: true,
-    minimizer: [
-      new TerserPlugin({
-        terserOptions: {
-          compress: {
-            drop_console: process.env.NODE_ENV === 'production',
-            pure_funcs: ['console.log', 'console.info']
-          }
-        }
-      })
-    ]
+    minimizer: [new TerserPlugin()]
   }
 };
