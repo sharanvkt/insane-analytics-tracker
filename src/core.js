@@ -2,22 +2,20 @@
 
 /**
  * InsaneAnalytics - Client-side analytics tracking library
- * Tracks page views, user engagement, performance metrics, and more
  */
 class InsaneAnalytics {
     constructor(config = {}) {
-      console.log('InsaneAnalytics: Constructor called with config:', config);
-  
-      // Core configuration
+      this.debug('Constructor called with config:', config);
+      
       this.config = {
-        endpoint: config.endpoint || 'https://api.insaneanalytics.com',
+        endpoint: config.endpoint?.replace(/\/$/, '') || 'https://api.insaneanalytics.com',
         domainId: config.domainId,
         batchSize: config.batchSize || 10,
         batchInterval: config.batchInterval || 5000,
         debug: config.debug || false
       };
   
-      // Initialize core state
+      // Core state
       this.queue = [];
       this.visitorId = this.getVisitorId();
       this.sessionId = this.generateId();
@@ -27,65 +25,55 @@ class InsaneAnalytics {
       this.isActive = false;
       this.initialized = false;
   
-      // Performance and engagement metrics
-      this.pageLoadTime = null;
-      this.scrollDepth = 0;
-      this.maxScrollDepth = 0;
+      // Metrics
       this.interactions = 0;
+      this.maxScrollDepth = 0;
   
-      // Initialize if config is provided
+      // Bind methods to preserve context
+      this.handleActivity = this.handleActivity.bind(this);
+      this.handleScroll = this.handleScroll.bind(this);
+      this.handleVisibilityChange = this.handleVisibilityChange.bind(this);
+      this.handleExit = this.handleExit.bind(this);
+  
+      // Initialize if domainId is provided
       if (config.domainId) {
         this.init();
       }
     }
   
-    /**
-     * Initialize tracking and set up event listeners
-     */
     init() {
-      console.log('InsaneAnalytics: Initializing...');
+      this.debug('Initializing...');
       if (this.initialized) return;
-      this.initialized = true;
   
       try {
-        // Track initial page visit
-        this.trackPageview();
-  
-        // Set up core event listeners
         this.setupEventListeners();
-  
-        // Start batch processing
         this.startBatchProcessing();
-  
-        // Track performance metrics
         this.trackPerformance();
-  
-        console.log('InsaneAnalytics: Initialization complete');
+        this.trackPageview();
+        
+        this.initialized = true;
+        this.debug('Initialization complete');
       } catch (error) {
-        console.error('InsaneAnalytics: Initialization error:', error);
+        console.error('Initialization error:', error);
       }
     }
   
-    /**
-     * Set up all event listeners for tracking
-     */
     setupEventListeners() {
-      // User activity tracking
-      document.addEventListener('mousemove', this.handleActivity.bind(this));
-      document.addEventListener('keypress', this.handleActivity.bind(this));
-      document.addEventListener('click', this.handleActivity.bind(this));
-      document.addEventListener('scroll', this.handleScroll.bind(this));
+      // Activity events
+      ['mousemove', 'keypress', 'click'].forEach(event => {
+        document.addEventListener(event, this.handleActivity);
+      });
   
-      // Page visibility
-      document.addEventListener('visibilitychange', this.handleVisibilityChange.bind(this));
+      // Scroll tracking
+      document.addEventListener('scroll', this.handleScroll);
   
-      // Before user leaves the page
-      window.addEventListener('beforeunload', this.handleExit.bind(this));
+      // Visibility
+      document.addEventListener('visibilitychange', this.handleVisibilityChange);
+  
+      // Exit
+      window.addEventListener('beforeunload', this.handleExit);
     }
   
-    /**
-     * Handle user activity events
-     */
     handleActivity() {
       const now = Date.now();
       
@@ -102,43 +90,28 @@ class InsaneAnalytics {
       this.interactions++;
     }
   
-    /**
-     * Track scroll depth
-     */
     handleScroll() {
       const winHeight = window.innerHeight;
-      const docHeight = Math.max(
-        document.documentElement.scrollHeight,
-        document.documentElement.offsetHeight,
-        document.body.scrollHeight,
-        document.body.offsetHeight
-      );
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-      const currentScrollDepth = Math.round((scrollTop / (docHeight - winHeight)) * 100);
+      const docHeight = document.documentElement.scrollHeight;
+      const scrollTop = window.scrollY;
+      const currentDepth = Math.round((scrollTop / (docHeight - winHeight)) * 100);
   
-      if (currentScrollDepth > this.maxScrollDepth) {
-        this.maxScrollDepth = currentScrollDepth;
+      if (currentDepth > this.maxScrollDepth) {
+        this.maxScrollDepth = currentDepth;
         this.track('scroll_depth', { depth: this.maxScrollDepth });
       }
     }
   
-    /**
-     * Handle page visibility changes
-     */
     handleVisibilityChange() {
-      if (document.hidden) {
-        this.track('page_hide', {
-          activeTime: this.activeTime,
-          totalTime: Date.now() - this.startTime
-        });
-      } else {
-        this.track('page_show');
-      }
+      const eventType = document.hidden ? 'page_hide' : 'page_show';
+      const data = document.hidden ? {
+        activeTime: this.activeTime,
+        totalTime: Date.now() - this.startTime
+      } : {};
+      
+      this.track(eventType, data);
     }
   
-    /**
-     * Handle page exit
-     */
     handleExit() {
       this.track('page_exit', {
         activeTime: this.activeTime,
@@ -146,32 +119,35 @@ class InsaneAnalytics {
         maxScrollDepth: this.maxScrollDepth,
         interactions: this.interactions
       });
-      this.sendBatch(true); // Force send on exit
-    }
-  
-    /**
-     * Track page load and performance metrics
-     */
-    trackPerformance() {
-      if (window.performance) {
-        const timing = performance.timing;
-        const loadTime = timing.loadEventEnd - timing.navigationStart;
-        const domLoadTime = timing.domContentLoadedEventEnd - timing.navigationStart;
-  
-        this.track('performance', {
-          loadTime,
-          domLoadTime,
-          firstPaint: performance.getEntriesByType('paint')[0]?.startTime
-        });
-  
-        // Measure connection speed
-        this.measureConnectionSpeed();
+      
+      // Force send remaining events
+      if (navigator.sendBeacon) {
+        const batch = this.queue.splice(0, this.queue.length);
+        navigator.sendBeacon(
+          `${this.config.endpoint}/collect`,
+          JSON.stringify(batch)
+        );
       }
     }
   
-    /**
-     * Measure connection speed
-     */
+    trackPerformance() {
+      if (!window.performance) return;
+  
+      // Basic metrics
+      const timing = performance.timing;
+      const loadTime = timing.loadEventEnd - timing.navigationStart;
+      const domLoadTime = timing.domContentLoadedEventEnd - timing.navigationStart;
+  
+      this.track('performance', {
+        loadTime,
+        domLoadTime,
+        firstPaint: performance.getEntriesByType('paint')[0]?.startTime
+      });
+  
+      // Connection speed
+      this.measureConnectionSpeed();
+    }
+  
     async measureConnectionSpeed() {
       try {
         const startTime = performance.now();
@@ -190,9 +166,6 @@ class InsaneAnalytics {
       }
     }
   
-    /**
-     * Track page view
-     */
     trackPageview() {
       this.track('pageview', {
         url: window.location.href,
@@ -202,9 +175,6 @@ class InsaneAnalytics {
       });
     }
   
-    /**
-     * Queue an event for tracking
-     */
     track(eventType, data = {}) {
       const event = {
         eventType,
@@ -225,30 +195,14 @@ class InsaneAnalytics {
       }
     }
   
-    /**
-     * Start batch processing interval
-     */
     startBatchProcessing() {
-      setInterval(() => {
-        this.sendBatch();
-      }, this.config.batchInterval);
+      setInterval(() => this.sendBatch(), this.config.batchInterval);
     }
   
-    /**
-     * Send batch of events to server
-     */
-    async sendBatch(sync = false) {
+    async sendBatch() {
       if (this.queue.length === 0) return;
   
       const batch = this.queue.splice(0, this.config.batchSize);
-  
-      if (sync && navigator.sendBeacon) {
-        navigator.sendBeacon(
-          `${this.config.endpoint}/collect`,
-          JSON.stringify(batch)
-        );
-        return;
-      }
   
       try {
         const response = await fetch(`${this.config.endpoint}/collect`, {
@@ -263,12 +217,10 @@ class InsaneAnalytics {
         }
       } catch (error) {
         this.debug('Error sending batch:', error);
-        // Re-queue failed events
         this.queue.unshift(...batch);
       }
     }
   
-    // Utility methods
     generateId() {
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
         const r = Math.random() * 16 | 0;
@@ -303,23 +255,27 @@ class InsaneAnalytics {
     }
   }
   
-  // Export for both browser and module environments
-  if (typeof window !== 'undefined') {
-    window.InsaneAnalytics = InsaneAnalytics;
-  } else {
-    module.exports = InsaneAnalytics;
-  }
-  
   // Handle async initialization queue
-  if (typeof window !== 'undefined' && window.ia && window.ia.q) {
-    const queue = window.ia.q;
-    window.ia = function() {
-      const analytics = new InsaneAnalytics();
-      for (const args of queue) {
-        if (typeof analytics[args[0]] === 'function') {
-          analytics[args[0]].apply(analytics, args.slice(1));
-        }
+  if (typeof window !== 'undefined') {
+    const analytics = new InsaneAnalytics();
+    const queue = window.ia?.q || [];
+    
+    // Process any queued commands
+    queue.forEach(args => {
+      if (typeof analytics[args[0]] === 'function') {
+        analytics[args[0]].apply(analytics, args.slice(1));
       }
-      return analytics;
+    });
+  
+    // Replace queue with actual instance
+    window.ia = function() {
+      if (typeof analytics[arguments[0]] === 'function') {
+        analytics[arguments[0]].apply(analytics, Array.prototype.slice.call(arguments, 1));
+      }
     };
+  
+    // Export for module environments
+    if (typeof module !== 'undefined') {
+      module.exports = InsaneAnalytics;
+    }
   }

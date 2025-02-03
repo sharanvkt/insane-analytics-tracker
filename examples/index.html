@@ -8,34 +8,56 @@
 <body>
     <h1>Analytics Tracker Test Page</h1>
     <p>Open console to see tracking events</p>
-    <div style="height: 2000px;"></div>
+    <div style="height: 2000px"></div>
 
+    <!-- Analytics Initialization -->
     <script>
-    (function(w,d,s,o,f,js,fjs){
-        console.log('Loading InsaneAnalytics...');
-        w['InsaneAnalytics']=o;
-        w[o]=w[o]||function(){
-            console.log('Queue function called with:', arguments);
-            (w[o].q=w[o].q||[]).push(arguments);
-        };
-        js=d.createElement(s);
-        js.async=1;
-        js.src=f;
-        js.onerror = function(error) {
-            console.error('Error loading analytics:', error);
-        };
-        js.onload = function() {
-            console.log('Analytics script loaded successfully');
-            w[o]('init', {
-                domainId: 'test-domain',
-                endpoint: 'http://localhost:3000',
-                debug: true
-            });
-        };
-        fjs=d.getElementsByTagName(s)[0];
-        fjs.parentNode.insertBefore(js,fjs);
-    }(window,document,'script','ia',
-      'https://cdn.jsdelivr.net/gh/sharanvkt/insane-analytics-tracker@v1.0.0/dist/analytics.min.js'));
+      // Initialize analytics queue
+      window.ia = window.ia || function() {
+        (window.ia.q = window.ia.q || []).push(arguments);
+      };
+      window.ia.q = window.ia.q || [];
+      
+      // Mock server endpoints
+      const mockEndpoint = {
+        "/collect": async (data) => {
+          console.log("Data collected:", JSON.parse(data));
+          return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        },
+        "/beacon": async () => {
+          return new Response(new Blob([new ArrayBuffer(40000)]), {
+            status: 200,
+            headers: { "content-length": "40000" }
+          });
+        }
+      };
+
+      // Mock fetch for testing
+      const originalFetch = window.fetch;
+      window.fetch = async (url, options) => {
+        if (url.includes("/collect") || url.includes("/beacon")) {
+          const path = url.includes("/collect") ? "/collect" : "/beacon";
+          return mockEndpoint[path](options?.body);
+        }
+        return originalFetch(url, options);
+      };
+
+      // Configure analytics
+      window.ia("init", {
+        domainId: "test-domain",
+        endpoint: "http://localhost:5500",
+        debug: true,
+        batchInterval: 2000
+      });
+    </script>
+
+    <!-- Load analytics script -->
+    <script async src="https://cdn.jsdelivr.net/gh/sharanvkt/insane-analytics-tracker@v1.0.0/dist/analytics.min.js" 
+            onerror="console.error('Failed to load analytics script')"
+            onload="console.log('Analytics script loaded successfully')">
     </script>
 </body>
 </html>
