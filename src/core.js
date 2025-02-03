@@ -1,7 +1,13 @@
 // src/core.js
 
+/**
+ * InsaneAnalytics - Client-side analytics tracking library
+ * Tracks page views, user engagement, performance metrics, and more
+ */
 class InsaneAnalytics {
     constructor(config = {}) {
+      console.log('InsaneAnalytics: Constructor called with config:', config);
+  
       // Core configuration
       this.config = {
         endpoint: config.endpoint || 'https://api.insaneanalytics.com',
@@ -11,7 +17,7 @@ class InsaneAnalytics {
         debug: config.debug || false
       };
   
-      // Core state
+      // Initialize core state
       this.queue = [];
       this.visitorId = this.getVisitorId();
       this.sessionId = this.generateId();
@@ -19,10 +25,13 @@ class InsaneAnalytics {
       this.lastActiveTime = Date.now();
       this.activeTime = 0;
       this.isActive = false;
+      this.initialized = false;
+  
+      // Performance and engagement metrics
       this.pageLoadTime = null;
       this.scrollDepth = 0;
       this.maxScrollDepth = 0;
-      this.initialized = false;
+      this.interactions = 0;
   
       // Initialize if config is provided
       if (config.domainId) {
@@ -30,37 +39,53 @@ class InsaneAnalytics {
       }
     }
   
+    /**
+     * Initialize tracking and set up event listeners
+     */
     init() {
+      console.log('InsaneAnalytics: Initializing...');
       if (this.initialized) return;
       this.initialized = true;
   
-      // Track initial page visit
-      this.trackPageview();
+      try {
+        // Track initial page visit
+        this.trackPageview();
   
-      // Set up core event listeners
-      this.setupEventListeners();
+        // Set up core event listeners
+        this.setupEventListeners();
   
-      // Start batch processing
-      this.startBatchProcessing();
+        // Start batch processing
+        this.startBatchProcessing();
   
-      // Track performance metrics
-      this.trackPerformance();
+        // Track performance metrics
+        this.trackPerformance();
+  
+        console.log('InsaneAnalytics: Initialization complete');
+      } catch (error) {
+        console.error('InsaneAnalytics: Initialization error:', error);
+      }
     }
   
+    /**
+     * Set up all event listeners for tracking
+     */
     setupEventListeners() {
-      // Activity tracking
+      // User activity tracking
       document.addEventListener('mousemove', this.handleActivity.bind(this));
       document.addEventListener('keypress', this.handleActivity.bind(this));
       document.addEventListener('click', this.handleActivity.bind(this));
       document.addEventListener('scroll', this.handleScroll.bind(this));
-      
-      // Visibility change
+  
+      // Page visibility
       document.addEventListener('visibilitychange', this.handleVisibilityChange.bind(this));
-      
-      // Exit intent
+  
+      // Before user leaves the page
       window.addEventListener('beforeunload', this.handleExit.bind(this));
     }
   
+    /**
+     * Handle user activity events
+     */
     handleActivity() {
       const now = Date.now();
       
@@ -74,8 +99,12 @@ class InsaneAnalytics {
       }
       
       this.lastActiveTime = now;
+      this.interactions++;
     }
   
+    /**
+     * Track scroll depth
+     */
     handleScroll() {
       const winHeight = window.innerHeight;
       const docHeight = Math.max(
@@ -93,6 +122,9 @@ class InsaneAnalytics {
       }
     }
   
+    /**
+     * Handle page visibility changes
+     */
     handleVisibilityChange() {
       if (document.hidden) {
         this.track('page_hide', {
@@ -104,15 +136,22 @@ class InsaneAnalytics {
       }
     }
   
+    /**
+     * Handle page exit
+     */
     handleExit() {
       this.track('page_exit', {
         activeTime: this.activeTime,
         totalTime: Date.now() - this.startTime,
-        maxScrollDepth: this.maxScrollDepth
+        maxScrollDepth: this.maxScrollDepth,
+        interactions: this.interactions
       });
       this.sendBatch(true); // Force send on exit
     }
   
+    /**
+     * Track page load and performance metrics
+     */
     trackPerformance() {
       if (window.performance) {
         const timing = performance.timing;
@@ -130,12 +169,14 @@ class InsaneAnalytics {
       }
     }
   
+    /**
+     * Measure connection speed
+     */
     async measureConnectionSpeed() {
       try {
         const startTime = performance.now();
         const response = await fetch(`${this.config.endpoint}/beacon`, {
-          cache: 'no-cache',
-          mode: 'cors'
+          cache: 'no-cache'
         });
         const endTime = performance.now();
         
@@ -145,10 +186,13 @@ class InsaneAnalytics {
   
         this.track('connection_speed', { speed });
       } catch (error) {
-        this.logError('Error measuring connection speed', error);
+        this.debug('Error measuring connection speed:', error);
       }
     }
   
+    /**
+     * Track page view
+     */
     trackPageview() {
       this.track('pageview', {
         url: window.location.href,
@@ -158,6 +202,9 @@ class InsaneAnalytics {
       });
     }
   
+    /**
+     * Queue an event for tracking
+     */
     track(eventType, data = {}) {
       const event = {
         eventType,
@@ -178,26 +225,33 @@ class InsaneAnalytics {
       }
     }
   
+    /**
+     * Start batch processing interval
+     */
     startBatchProcessing() {
       setInterval(() => {
         this.sendBatch();
       }, this.config.batchInterval);
     }
   
+    /**
+     * Send batch of events to server
+     */
     async sendBatch(sync = false) {
       if (this.queue.length === 0) return;
   
       const batch = this.queue.splice(0, this.config.batchSize);
-      const endpoint = `${this.config.endpoint}/collect`;
   
       if (sync && navigator.sendBeacon) {
-        // Use sendBeacon for sync sending (e.g., on page unload)
-        navigator.sendBeacon(endpoint, JSON.stringify(batch));
+        navigator.sendBeacon(
+          `${this.config.endpoint}/collect`,
+          JSON.stringify(batch)
+        );
         return;
       }
   
       try {
-        const response = await fetch(endpoint, {
+        const response = await fetch(`${this.config.endpoint}/collect`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(batch),
@@ -208,7 +262,7 @@ class InsaneAnalytics {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
       } catch (error) {
-        this.logError('Error sending batch', error);
+        this.debug('Error sending batch:', error);
         // Re-queue failed events
         this.queue.unshift(...batch);
       }
@@ -247,15 +301,6 @@ class InsaneAnalytics {
         console.log('[InsaneAnalytics]', ...args);
       }
     }
-  
-    logError(message, error) {
-      console.error('[InsaneAnalytics] Error:', message, error);
-      this.track('error', {
-        message,
-        errorMessage: error.message,
-        stack: error.stack
-      });
-    }
   }
   
   // Export for both browser and module environments
@@ -263,4 +308,18 @@ class InsaneAnalytics {
     window.InsaneAnalytics = InsaneAnalytics;
   } else {
     module.exports = InsaneAnalytics;
+  }
+  
+  // Handle async initialization queue
+  if (typeof window !== 'undefined' && window.ia && window.ia.q) {
+    const queue = window.ia.q;
+    window.ia = function() {
+      const analytics = new InsaneAnalytics();
+      for (const args of queue) {
+        if (typeof analytics[args[0]] === 'function') {
+          analytics[args[0]].apply(analytics, args.slice(1));
+        }
+      }
+      return analytics;
+    };
   }

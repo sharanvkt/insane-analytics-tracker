@@ -1,25 +1,43 @@
 <!-- examples/index.html -->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Analytics Tracker Example</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Tracker Test</title>
 </head>
 <body>
     <h1>Analytics Tracker Test Page</h1>
-    
-    <script>
-    (function(w,d,s,o,f,js,fjs){
-        w['InsaneAnalytics']=o;w[o]=w[o]||function(){
-        (w[o].q=w[o].q||[]).push(arguments)};
-        js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];
-        js.async=1;js.src=f;fjs.parentNode.insertBefore(js,fjs);
-    }(window,document,'script','ia',
-      'https://cdn.jsdelivr.net/gh/yourusername/insane-analytics-tracker@main/dist/analytics.min.js'));
+    <p>Open console to see tracking events</p>
+    <div style="height: 2000px;"></div>
 
-    ia('init', {
-        domainId: 'test-domain',
-        endpoint: 'https://your-api.com'
-    });
-    </script>
+    <script>
+        (function(w,d,s,o,f,js,fjs){
+            console.log('Loading InsaneAnalytics...');
+            w['InsaneAnalytics']=o;
+            w[o]=w[o]||function(){
+                console.log('Queue function called with:', arguments);
+                (w[o].q=w[o].q||[]).push(arguments);
+            };
+            js=d.createElement(s);
+            js.async=1;
+            js.src=f;
+            js.onerror = function(error) {
+                console.error('Error loading analytics:', error);
+            };
+            js.onload = function() {
+                console.log('Analytics script loaded successfully');
+                // Initialize immediately after load
+                w[o]('init', {
+                    domainId: 'test-domain',
+                    endpoint: 'http://localhost:3000',
+                    debug: true
+                });
+            };
+            fjs=d.getElementsByTagName(s)[0];
+            fjs.parentNode.insertBefore(js,fjs);
+        }(window,document,'script','ia',
+          'https://cdn.jsdelivr.net/gh/sharanvkt/insane-analytics-tracker@main/dist/analytics.min.js'));
+        </script>
 </body>
 </html>
