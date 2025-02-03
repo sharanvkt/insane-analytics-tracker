@@ -1,0 +1,22 @@
+{
+    "name": "insane-analytics-tracker",
+    "version": "0.1.0",
+    "description": "Client-side analytics tracking script",
+    "main": "dist/analytics.min.js",
+    "scripts": {
+        "build": "webpack --mode production",
+        "build:dev": "webpack --mode development",
+        "watch": "webpack --mode development --watch"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/yourusername/insane-analytics-tracker.git"
+    },
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "terser-webpack-plugin": "^5.3.11",
+        "webpack": "^5.97.1",
+        "webpack-cli": "^5.1.4"
+    }
+}

@@ -1,0 +1,25 @@
+<!-- examples/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Analytics Tracker Example</title>
+</head>
+<body>
+    <h1>Analytics Tracker Test Page</h1>
+    
+    <script>
+    (function(w,d,s,o,f,js,fjs){
+        w['InsaneAnalytics']=o;w[o]=w[o]||function(){
+        (w[o].q=w[o].q||[]).push(arguments)};
+        js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];
+        js.async=1;js.src=f;fjs.parentNode.insertBefore(js,fjs);
+    }(window,document,'script','ia',
+      'https://cdn.jsdelivr.net/gh/yourusername/insane-analytics-tracker@main/dist/analytics.min.js'));
+
+    ia('init', {
+        domainId: 'test-domain',
+        endpoint: 'https://your-api.com'
+    });
+    </script>
+</body>
+</html>
